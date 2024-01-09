@@ -226,6 +226,7 @@ def profile():
                         setattr(g.user, key, value)
             db.session.add(g.user)
             db.session.commit()
+            flash(f"{form.username.data}'s profile successfully updated", "success")
             return redirect(f"/users/{g.user.id}")
         else:
             flash(f"Invalid password for {form.username.data}.", "danger")
@@ -310,8 +311,10 @@ def homepage():
     """
 
     if g.user:
+        following = [user_id.id for user_id in g.user.following]
         messages = (Message
                     .query
+                    .filter(Message.user_id.in_(following))
                     .order_by(Message.timestamp.desc())
                     .limit(100)
                     .all())
