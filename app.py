@@ -3,9 +3,10 @@ import os
 from flask import Flask, render_template, request, flash, redirect, session, g
 from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
+from urllib.parse import urlparse
 
 from forms import UserAddForm, LoginForm, MessageForm, EditProfile
-from models import db, connect_db, User, Message
+from models import db, connect_db, User, Message, Likes
 
 CURR_USER_KEY = "curr_user"
 
@@ -209,6 +210,57 @@ def stop_following(follow_id):
     return redirect(f"/users/{g.user.id}/following")
 
 
+@app.route('/users/add_like/<int:message_id>', methods=['POST'])
+def like_message(message_id):
+    """Have a currently-logged-in-user like a message"""
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+
+    msg = Message.query.get_or_404(message_id)
+    if g.user.id != msg.user_id:
+        liked_message = Likes(user_id=g.user.id, message_id=message_id)
+        db.session.add(liked_message)
+        db.session.commit()
+    else:
+        flash("You can only like posts created by other users.", "info")
+
+    # return user to the page they were previously on
+    referer = request.headers.get('Referer')
+    parsed_url = urlparse(referer)
+    path = parsed_url.path
+    return redirect(f"{path}")
+
+
+@app.route('/users/remove_like/<int:message_id>', methods=['POST'])
+def remove_like(message_id):
+
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/login")
+
+    unlike = Likes.query.filter_by(
+        user_id=g.user.id, message_id=message_id).first()
+    db.session.delete(unlike)
+    db.session.commit()
+
+    # return user to the page they were previously on
+    referer = request.headers.get('Referer')
+    parsed_url = urlparse(referer)
+    path = parsed_url.path
+    return redirect(f"{path}")
+
+
+@app.route('/users/<int:user_id>/likes')
+def likes_detail(user_id):
+
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/login")
+
+    return render_template("/users/likes.html", user=g.user)
+
+
 @app.route('/users/profile', methods=["GET", "POST"])
 def profile():
     """Update profile for current user."""
@@ -318,8 +370,10 @@ def homepage():
                     .order_by(Message.timestamp.desc())
                     .limit(100)
                     .all())
+        user_likes = Likes.query.filter_by(user_id=g.user.id)
+        likes = [like.message_id for like in user_likes]
 
-        return render_template('home.html', messages=messages)
+        return render_template('home.html', messages=messages, likes=likes)
 
     else:
         return render_template('home-anon.html')
