@@ -1,5 +1,6 @@
 Bugs
 Fixed user bio(s) on /users
 
+Messages are unable to liked by multiple users, removed unique constraint to correct.
 
 
